@@ -1,0 +1,13 @@
+rules:
+  - id: P1
+    enabled: true
+  - id: P2
+    enabled: true
+  - id: P3
+    enabled: true
+  - id: P4
+    enabled: true
+  - id: P5
+    enabled: true
+  - id: P6
+    enabled: true
