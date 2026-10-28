@@ -80,6 +80,40 @@ def test_p2_blocks_untrusted_destination_and_allows_trusted_destination() -> Non
     assert "P2" not in allowed.fired_policies
 
 
+def test_p2_does_not_block_untrusted_repetition_of_user_explicit_destination() -> None:
+    recipient = "ops@internal.example"
+    result = PolicyEngine().evaluate(
+        call(
+            "send_email",
+            {
+                "to": segment(
+                    "runbook-recipient",
+                    origin=Origin.FILE,
+                    text=recipient,
+                )
+            },
+            recipients=frozenset({recipient}),
+        )
+    )
+
+    assert result.action == ALLOW
+    assert "P2" not in result.fired_policies
+
+
+def test_p2_still_blocks_untrusted_destination_outside_explicit_set() -> None:
+    recipient = "attacker@example.test"
+    result = PolicyEngine().evaluate(
+        call(
+            "send_email",
+            {"to": segment("runbook-recipient", origin=Origin.FILE, text=recipient)},
+            recipients=frozenset({"ops@internal.example"}),
+        )
+    )
+
+    assert result.action == BLOCK
+    assert "P2" in result.fired_policies
+
+
 def test_p3_blocks_sensitive_data_to_non_explicit_recipient_and_allows_explicit_one() -> None:
     engine = PolicyEngine()
     secret_body = segment("secret-body", labels={"secret"}, text="private details")

@@ -68,6 +68,9 @@ def _primary_argument(tool: str, arguments: dict[str, str]) -> tuple[str, str] |
         "send_email": ("to", "recipient", "destination"),
         "send_message": ("to", "recipient", "destination"),
         "http_post": ("url", "destination", "to"),
+        "write_file": ("path",),
+        "delete_file": ("path",),
+        "purchase": ("item",),
     }.get(tool, ())
     for name in names:
         if name in arguments:

@@ -89,6 +89,10 @@ class PolicyEngine:
             for name in DESTINATION_ARGUMENTS
             if name in call.arguments
         ]
+        destination_is_explicit = bool(destinations) and all(
+            destination.text in call.user_explicit_recipients
+            for destination in destinations
+        )
 
         def fire(policy_id: str, reason: str) -> None:
             fired.append(policy_id)
@@ -99,7 +103,10 @@ class PolicyEngine:
                 fire("P1", "Untrusted content initiated a tool not authorized by the user.")
 
         if self.enabled_rules["P2"] and call.tool in SEND_TOOLS:
-            if any(_is_untrusted(destination) for destination in destinations):
+            if (
+                any(_is_untrusted(destination) for destination in destinations)
+                and not destination_is_explicit
+            ):
                 fire("P2", "An untrusted value determines a sending tool's destination.")
 
         sensitive_arguments = {
@@ -107,10 +114,6 @@ class PolicyEngine:
             for name, segment in call.arguments.items()
             if segment.labels.intersection({"private", "secret"})
         }
-        destination_is_explicit = bool(destinations) and all(
-            destination.text in call.user_explicit_recipients
-            for destination in destinations
-        )
         if self.enabled_rules["P3"] and call.tool in SEND_TOOLS:
             if sensitive_arguments and not destination_is_explicit:
                 fire("P3", "Private or secret data would be sent to a non-explicit destination.")
