@@ -29,6 +29,7 @@ class LLMClient(ABC):
         self,
         messages: Sequence[dict[str, Any]],
         tools: Sequence[dict[str, Any]],
+        system: str | None = None,
     ) -> LLMResponse:
         """Return either assistant text or one or more structured tool proposals."""
 
@@ -45,11 +46,13 @@ class FakeLLMClient(LLMClient):
         self,
         messages: Sequence[dict[str, Any]],
         tools: Sequence[dict[str, Any]],
+        system: str | None = None,
     ) -> LLMResponse:
         self.calls.append(
             {
                 "messages": copy.deepcopy(list(messages)),
                 "tools": copy.deepcopy(list(tools)),
+                "system": system,
             }
         )
         if self._next_response >= len(self._responses):
@@ -97,11 +100,13 @@ class AnthropicClient(LLMClient):
         self.model = model
         self.max_tokens = max_tokens
         self._client: Any | None = None
+        self.usage_totals = {"input_tokens": 0, "output_tokens": 0}
 
     def complete(
         self,
         messages: Sequence[dict[str, Any]],
         tools: Sequence[dict[str, Any]],
+        system: str | None = None,
     ) -> LLMResponse:
         try:
             import anthropic
@@ -116,13 +121,20 @@ class AnthropicClient(LLMClient):
                 raise RuntimeError("ANTHROPIC_API_KEY was not found in the environment or .env")
             self._client = anthropic.Anthropic(api_key=api_key)
 
-        response = self._client.messages.create(
-            model=self.model,
-            max_tokens=self.max_tokens,
-            temperature=0,
-            messages=list(messages),
-            tools=list(tools),
-        )
+        request = {
+            "model": self.model,
+            "max_tokens": self.max_tokens,
+            "temperature": 0,
+            "messages": list(messages),
+            "tools": list(tools),
+        }
+        if system is not None:
+            request["system"] = system
+        response = self._client.messages.create(**request)
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self.usage_totals["input_tokens"] += int(getattr(usage, "input_tokens", 0))
+            self.usage_totals["output_tokens"] += int(getattr(usage, "output_tokens", 0))
         text_blocks: list[str] = []
         proposals: list[ToolCallProposal] = []
         for block in response.content:

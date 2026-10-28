@@ -1,5 +1,8 @@
+import sys
+from types import SimpleNamespace
+
 from taintgate.llm_agent import LLMAgent
-from taintgate.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
+from taintgate.llm_client import AnthropicClient, FakeLLMClient, LLMResponse, ToolCallProposal
 from taintgate.provenance import Origin, Segment
 
 
@@ -98,3 +101,32 @@ def test_fake_client_raises_when_script_is_exhausted() -> None:
         assert "exhausted" in str(error)
     else:
         raise AssertionError("Expected FakeLLMClient to reject an exhausted script.")
+
+
+def test_anthropic_adapter_passes_system_and_accumulates_mock_usage(monkeypatch) -> None:
+    captured: list[dict[str, object]] = []
+
+    class MockMessages:
+        def create(self, **kwargs):
+            captured.append(kwargs)
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text="Mock response.")],
+                usage=SimpleNamespace(input_tokens=12, output_tokens=7),
+            )
+
+    class MockAnthropic:
+        def __init__(self, api_key: str) -> None:
+            assert api_key == "synthetic-test-key"
+            self.messages = MockMessages()
+
+    monkeypatch.setitem(sys.modules, "anthropic", SimpleNamespace(Anthropic=MockAnthropic))
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-test-key")
+    client = AnthropicClient(model="synthetic-model")
+
+    response = client.complete(messages=[], tools=[], system="Mock system prompt.")
+    client.complete(messages=[], tools=[])
+
+    assert response.text == "Mock response."
+    assert captured[0]["system"] == "Mock system prompt."
+    assert "system" not in captured[1]
+    assert client.usage_totals == {"input_tokens": 24, "output_tokens": 14}
