@@ -6,7 +6,7 @@ from taintgate.bench2 import BenchCaseV2, convert_cases
 from taintgate.llm_adapt import DEFENSE_SUMMARIES, paraphrase_attack, select_adaptive_cases
 from taintgate.llm_client import FakeLLMClient, LLMResponse
 from taintgate.provenance import Origin, Segment
-from scripts.run_llm_bench import run_cli
+from scripts.run_llm_bench import build_preview_plan, run_cli
 
 
 def _case() -> BenchCaseV2:
@@ -103,5 +103,39 @@ def test_benchmark_script_dry_run_estimates_without_creating_clients(tmp_path, c
     assert result == 0
     assert "APPROXIMATE total plan estimate" in output
     assert "Dry run only" in output
+    assert created == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_preview_plan_has_required_case_counts() -> None:
+    plan = build_preview_plan(convert_cases())
+
+    assert len(plan["dev"]) == 80
+    assert len(plan["detector_extractor"]) == 60
+    assert len(plan["variance"]) == 40
+    assert len(plan["adaptive"]) == 16
+    assert Counter(case.category for case in plan["adaptive"]) == {
+        f"I{index}": 2 for index in range(1, 9)
+    }
+
+
+def test_ollama_preview_dry_run_does_not_create_client(tmp_path, capsys) -> None:
+    created: list[str] = []
+
+    def client_builder(model: str):
+        created.append(model)
+        raise AssertionError("preview dry-run must not create a client")
+
+    result = run_cli(
+        ["--ollama", "--preview", "--dry-run", "--max-usd", "10"],
+        client_builder=client_builder,
+        output_dir=tmp_path,
+    )
+
+    output = capsys.readouterr().out
+    assert result == 0
+    assert "APPROXIMATE total plan estimate" in output
+    assert "$0.000000" in output
+    assert "Dry run only; no LLM clients were created." in output
     assert created == []
     assert list(tmp_path.iterdir()) == []

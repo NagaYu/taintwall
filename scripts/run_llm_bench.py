@@ -16,6 +16,7 @@ from taintgate.llm_client import (
     LLMClient,
 )
 from taintgate.llm_runner import estimate_cost, run_llm_benchmark
+from taintgate.ollama_client import OLLAMA_DEFAULT_MODEL, OllamaClient
 
 
 REPORTS_DIR = Path(__file__).resolve().parents[1] / "reports"
@@ -34,8 +35,10 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the local Phase 2 TaintGate benchmark")
     parser.add_argument("--max-usd", type=float, required=True, help="maximum estimated spend")
     parser.add_argument("--dry-run", action="store_true", help="estimate and exit without creating clients")
-    parser.add_argument("--model", default=DEFAULT_ANTHROPIC_MODEL, help="Anthropic model ID")
+    parser.add_argument("--model", default=None, help="model ID (provider default when omitted)")
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS, help="variance trial count")
+    parser.add_argument("--ollama", action="store_true", help="use a local Ollama server at localhost")
+    parser.add_argument("--preview", action="store_true", help="use the deterministic preview subset")
     return parser.parse_args(argv)
 
 
@@ -58,6 +61,34 @@ def _select_core_cases(cases: Sequence[BenchCaseV2]) -> list[BenchCaseV2]:
     return attacks + benign + confusing
 
 
+def build_preview_plan(cases: Sequence[BenchCaseV2]) -> dict[str, list[BenchCaseV2]]:
+    """Choose the deterministic preview corpora for each measurement stage."""
+
+    attacks: list[BenchCaseV2] = []
+    adaptive: list[BenchCaseV2] = []
+    for index in range(1, 9):
+        category_cases = [
+            case
+            for case in cases
+            if case.category == f"I{index}" and case.attack_tool is not None
+        ]
+        if len(category_cases) < 5:
+            raise ValueError(f"category I{index} has fewer than five preview attack cases")
+        attacks.extend(category_cases[:5])
+        adaptive.extend(category_cases[:2])
+    benign = [case for case in cases if case.category == "benign"][:20]
+    confusing = [case for case in cases if case.category == "benign_confusing"][:20]
+    if len(benign) != 20 or len(confusing) != 20:
+        raise ValueError("dev set is missing benign cases needed for preview")
+    dev = attacks + benign + confusing
+    return {
+        "dev": dev,
+        "detector_extractor": attacks + confusing,
+        "variance": _select_core_cases(dev),
+        "adaptive": adaptive,
+    }
+
+
 def _estimate_entry(
     cases: Sequence[BenchCaseV2],
     conditions: Sequence[str],
@@ -75,18 +106,31 @@ def estimate_plan(
     cases: Sequence[BenchCaseV2],
     trials: int,
     prices: dict[str, float],
+    *,
+    preview: bool = False,
 ) -> dict[str, object]:
     """Approximate all benchmark, variance, paraphrase, and extractor calls up front."""
 
     if trials < 1:
         raise ValueError("--trials must be at least 1")
-    attack_and_confusing = [
-        case for case in cases if case.attack_tool is not None or case.category == "benign_confusing"
-    ]
-    core = _select_core_cases(cases)
-    adaptive = select_adaptive_cases(cases)
+    if preview:
+        plan = build_preview_plan(cases)
+        dev_cases = plan["dev"]
+        attack_and_confusing = plan["detector_extractor"]
+        core = plan["variance"]
+        adaptive = plan["adaptive"]
+        trials = 1
+    else:
+        dev_cases = list(cases)
+        attack_and_confusing = [
+            case
+            for case in cases
+            if case.attack_tool is not None or case.category == "benign_confusing"
+        ]
+        core = _select_core_cases(cases)
+        adaptive = select_adaptive_cases(cases)
     estimates = [
-        _estimate_entry(cases, ("C0", "C2", "C3"), prices),
+        _estimate_entry(dev_cases, ("C0", "C2", "C3"), prices),
         _estimate_entry(attack_and_confusing, ("C1", "C4"), prices),
     ]
     estimates.extend(
@@ -163,9 +207,18 @@ def _phase2_report(results: dict[str, object]) -> str:
     lines = [
         "# Phase 2 Measurement Report",
         "",
+    ]
+    if results.get("preview"):
+        if results.get("provider") == "ollama":
+            lines.extend(["**PREVIEW — local model (Ollama), no API cost**", ""])
+        else:
+            lines.extend(["**PREVIEW — hosted model; API cost may apply**", ""])
+    lines.extend(
+        [
         "This report contains measurements from the local LLM benchmark run recorded in `llm-results.json`.",
         "",
         f"- Model: `{results['model']}`",
+        f"- Provider: `{results['provider']}`",
         f"- Run time (UTC): {results['run_at_utc']}",
         "- The benchmark uses synthetic cases and mock tools; no external tool service is connected.",
         "",
@@ -173,7 +226,8 @@ def _phase2_report(results: dict[str, object]) -> str:
         "",
         "| Condition | ASR (n) | Utility (n) | benign_confusing directive rate (n) |",
         "|---|---:|---:|---:|",
-    ]
+        ]
+    )
     for condition in ("C0", "C1", "C2", "C3", "C4"):
         if condition not in baseline:
             continue
@@ -252,6 +306,10 @@ def _print_summary(results: dict[str, object]) -> None:
     adaptive = results["adaptive"]
     costs = results["actual_cost"]
     assert isinstance(baseline, dict) and isinstance(adaptive, dict) and isinstance(costs, dict)
+    if results.get("preview") and results.get("provider") == "ollama":
+        print(f"PREVIEW — local model (Ollama), no API cost — model: {results['model']}")
+    else:
+        print(f"Model: {results['model']} | provider: {results['provider']}")
     print("Condition | ASR | Utility | Adaptive ASR")
     print("---|---:|---:|---:")
     for condition in ("C0", "C1", "C2", "C3", "C4"):
@@ -275,19 +333,38 @@ def run_cli(
         raise ValueError("--max-usd must be greater than zero")
     if args.trials < 1:
         raise ValueError("--trials must be at least 1")
-    if args.model not in MODEL_PRICES:
-        raise ValueError(
-            f"No price entry for model {args.model!r}; add its official token rates to MODEL_PRICES first"
-        )
+    model = args.model or (OLLAMA_DEFAULT_MODEL if args.ollama else DEFAULT_ANTHROPIC_MODEL)
+    if args.ollama:
+        prices = {
+            "input_usd_per_million": 0.0,
+            "output_usd_per_million": 0.0,
+            "source": "local Ollama inference; no API token charge",
+        }
+    else:
+        if model not in MODEL_PRICES:
+            raise ValueError(
+                f"No price entry for model {model!r}; add its official token rates to MODEL_PRICES first"
+            )
+        prices = MODEL_PRICES[model]
 
-    prices = MODEL_PRICES[args.model]
-    cases = convert_cases()
-    selected_150 = [
-        case for case in cases if case.attack_tool is not None or case.category == "benign_confusing"
-    ]
-    core = _select_core_cases(cases)
-    adaptive_base = select_adaptive_cases(cases)
-    estimate = estimate_plan(cases, args.trials, prices)
+    all_cases = convert_cases()
+    plan = build_preview_plan(all_cases) if args.preview else None
+    cases = plan["dev"] if plan is not None else all_cases
+    selected_150 = (
+        plan["detector_extractor"]
+        if plan is not None
+        else [
+            case
+            for case in all_cases
+            if case.attack_tool is not None or case.category == "benign_confusing"
+        ]
+    )
+    core = plan["variance"] if plan is not None else _select_core_cases(all_cases)
+    adaptive_base = (
+        plan["adaptive"] if plan is not None else select_adaptive_cases(all_cases)
+    )
+    trials = 1 if args.preview else args.trials
+    estimate = estimate_plan(all_cases, trials, prices, preview=args.preview)
     print(
         "APPROXIMATE total plan estimate: "
         f"{estimate['total_tokens_estimate']} tokens, ${estimate['estimated_usd']:.6f} "
@@ -300,11 +377,16 @@ def run_cli(
         print("Estimated spend exceeds --max-usd; stopping before creating LLM clients.", file=sys.stderr)
         return 2
 
-    builder = client_builder or (lambda model: AnthropicClient(model=model))
+    if client_builder is not None:
+        builder = client_builder
+    elif args.ollama:
+        builder = lambda selected_model: OllamaClient(model=selected_model)
+    else:
+        builder = lambda selected_model: AnthropicClient(model=selected_model)
     clients: list[LLMClient] = []
 
     def new_client() -> LLMClient:
-        client = builder(args.model)
+        client = builder(model)
         clients.append(client)
         return client
 
@@ -339,7 +421,7 @@ def run_cli(
         baseline[condition] = _metric(result)
 
     variance_runs: dict[str, list[dict[str, float]]] = {"C0": [], "C3": []}
-    for _trial in range(args.trials):
+    for _trial in range(trials):
         for condition in ("C0", "C3"):
             trial_result = run_llm_benchmark(
                 core,
@@ -416,9 +498,11 @@ def run_cli(
         "price_source": prices["source"],
     }
     results: dict[str, object] = {
-        "model": args.model,
+        "model": model,
+        "provider": "ollama" if args.ollama else "anthropic",
+        "preview": args.preview,
         "run_at_utc": datetime.now(timezone.utc).isoformat(),
-        "trials": args.trials,
+        "trials": trials,
         "case_counts": dict(Counter(case.category for case in cases)),
         "estimate": estimate,
         "baseline": baseline,
