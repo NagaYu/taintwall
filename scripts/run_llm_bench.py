@@ -27,11 +27,6 @@ MODEL_PRICES = {
         "output_usd_per_million": 5.0,
         "source": "https://www.anthropic.com/news/claude-haiku-4-5",
     },
-    "claude-haiku-5-5": {
-        "input_usd_per_million": 0.10,
-        "output_usd_per_million": 0.50,
-        "source": "https://www.anthropic.com/claude/haiku-5-5",
-    },
 }
 
 

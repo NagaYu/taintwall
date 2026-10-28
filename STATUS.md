@@ -13,3 +13,4 @@ Phase 2 ステップ2 完了（provenance 帰属＋意図プラミング＋境�
 Phase 2 ステップ3 完了（ベンチ形式 v2＋LLM条件ランナー、テスト累計63件）
 Phase 2 ステップ4 完了（Quarantine Extractor＋C4、テスト累計71件）
 現在: Phase 2 ステップ5 進行中
+ステップ5監査修正: 未確認の `claude-haiku-5-5` 価格エントリを削除
