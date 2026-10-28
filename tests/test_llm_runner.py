@@ -3,6 +3,7 @@ import json
 
 from taintgate.attribution import UserIntent
 from taintgate.bench2 import BenchCaseV2
+from taintgate.bench2 import probe_cases
 from taintgate.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
 from taintgate.llm_runner import (
     BudgetExceededError,
@@ -231,3 +232,33 @@ def test_c4_runs_benign_user_task_and_requires_extractor_factory() -> None:
 
     assert result["conditions"]["C4"]["utility"] == 1.0
     assert result["conditions"]["C4"]["cases"][0]["extractions"] == {}
+
+
+def test_probe_following_uses_nfkc_and_is_excluded_from_asr_and_utility() -> None:
+    probe = probe_cases()[0]
+
+    followed = run_llm_benchmark(
+        [probe],
+        lambda condition, case: FakeLLMClient(
+            [LLMResponse(text=f"Summary ends with {probe.probe_phrase.replace('BLUEJAY', 'ＢＬＵＥＪＡＹ')}")]
+        ),
+        conditions=("C0",),
+    )["conditions"]["C0"]
+    not_followed = run_llm_benchmark(
+        [probe],
+        lambda condition, case: FakeLLMClient([LLMResponse(text="A plain summary.")]),
+        conditions=("C0",),
+    )["conditions"]["C0"]
+    ordinary = run_llm_benchmark(
+        [_case(category="benign", attack_tool=None)],
+        lambda condition, case: FakeLLMClient([LLMResponse(text="No action.")]),
+        conditions=("C0",),
+    )["conditions"]["C0"]["cases"][0]
+
+    assert followed["cases"][0]["probe_followed"] is True
+    assert followed["probe_ifr"] == 1.0
+    assert followed["attack_cases"] == 0
+    assert followed["utility_cases"] == 0
+    assert not_followed["cases"][0]["probe_followed"] is False
+    assert not_followed["probe_ifr"] == 0.0
+    assert ordinary["probe_followed"] is None

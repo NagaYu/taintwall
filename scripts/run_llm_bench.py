@@ -2,13 +2,15 @@
 
 import argparse
 import json
+import re
+import shutil
 import sys
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
-from taintgate.bench2 import BenchCaseV2, convert_cases
+from taintgate.bench2 import BenchCaseV2, convert_cases, probe_cases
 from taintgate.llm_adapt import DEFENSE_SUMMARIES, paraphrase_attack, select_adaptive_cases
 from taintgate.llm_client import (
     DEFAULT_ANTHROPIC_MODEL,
@@ -132,6 +134,7 @@ def estimate_plan(
     estimates = [
         _estimate_entry(dev_cases, ("C0", "C2", "C3"), prices),
         _estimate_entry(attack_and_confusing, ("C1", "C4"), prices),
+        _estimate_entry(probe_cases(), ("C0", "C3", "C4"), prices),
     ]
     estimates.extend(
         _estimate_entry(core, (condition,), prices)
@@ -190,7 +193,59 @@ def _metric(result: dict[str, object]) -> dict[str, object]:
         ],
         "cases": result["cases"],
         "runtime_seconds": result["runtime_seconds"],
+        "probe_followed": result.get("probe_followed", 0),
+        "probe_cases": result.get("probe_cases", 0),
+        "probe_ifr": result.get("probe_ifr"),
     }
+
+
+def _usage_and_cost(
+    clients: Sequence[LLMClient], prices: dict[str, float]
+) -> tuple[dict[str, int], dict[str, object]]:
+    usage = {
+        "input_tokens": sum(
+            int(getattr(client, "usage_totals", {}).get("input_tokens", 0))
+            for client in clients
+        ),
+        "output_tokens": sum(
+            int(getattr(client, "usage_totals", {}).get("output_tokens", 0))
+            for client in clients
+        ),
+    }
+    cost = {
+        "input_usd": usage["input_tokens"] * prices["input_usd_per_million"] / 1_000_000,
+        "output_usd": usage["output_tokens"] * prices["output_usd_per_million"] / 1_000_000,
+        "total_usd": (
+            usage["input_tokens"] * prices["input_usd_per_million"]
+            + usage["output_tokens"] * prices["output_usd_per_million"]
+        )
+        / 1_000_000,
+        "input_usd_per_million": prices["input_usd_per_million"],
+        "output_usd_per_million": prices["output_usd_per_million"],
+        "price_source": prices["source"],
+    }
+    return usage, cost
+
+
+def _archive_previous_result(report_dir: Path) -> Path | None:
+    result_path = report_dir / "llm-results.json"
+    if not result_path.exists():
+        return None
+    try:
+        existing = json.loads(result_path.read_text(encoding="utf-8"))
+        model_name = existing.get("model", "unknown-model")
+    except (OSError, json.JSONDecodeError, AttributeError):
+        model_name = "unknown-model"
+    model_slug = re.sub(r"[^A-Za-z0-9.-]+", "-", str(model_name)).strip("-") or "unknown-model"
+    archive_path = report_dir / f"llm-results.{model_slug}.json"
+    suffix = 2
+    while archive_path.exists():
+        if archive_path.read_bytes() == result_path.read_bytes():
+            return archive_path
+        archive_path = report_dir / f"llm-results.{model_slug}-{suffix}.json"
+        suffix += 1
+    shutil.copy2(result_path, archive_path)
+    return archive_path
 
 
 def _phase2_report(results: dict[str, object]) -> str:
@@ -199,11 +254,13 @@ def _phase2_report(results: dict[str, object]) -> str:
     variance = results["variance"]
     usage = results["usage"]
     costs = results["actual_cost"]
+    calibration = results["calibration"]
     assert isinstance(baseline, dict)
     assert isinstance(adaptive, dict)
     assert isinstance(variance, dict)
     assert isinstance(usage, dict)
     assert isinstance(costs, dict)
+    assert isinstance(calibration, dict)
     lines = [
         "# Phase 2 Measurement Report",
         "",
@@ -258,6 +315,26 @@ def _phase2_report(results: dict[str, object]) -> str:
         lines.append(
             f"| {condition} | {item['attack_successes']} / {item['attack_cases']} | {item['asr']:.3f} |"
         )
+    lines.extend(
+        [
+            "",
+            "## Calibration",
+            "",
+            "| Condition | Instruction follow rate (IFR) | Followed / cases |",
+            "|---|---:|---:|",
+        ]
+    )
+    for condition, item in calibration.items():
+        lines.append(
+            f"| {condition} | {item['instruction_follow_rate']:.3f} | "
+            f"{item['followed']} / {item['cases']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "C0 IFR is a measure of attack pressure; when it is low, ASR comparisons should be treated as reference values.",
+        ]
+    )
     lines.extend(["", "## Variance subset", "", "| Condition | ASR min–max | Utility min–max | Trials |", "|---|---:|---:|---:|"])
     for condition, item in variance.items():
         lines.append(
@@ -399,6 +476,36 @@ def run_cli(
         return new_client()
 
     baseline: dict[str, object] = {}
+    variance: dict[str, object] = {}
+    adaptive: dict[str, object] = {}
+    calibration: dict[str, object] = {}
+    report_dir = Path(output_dir)
+    report_dir.mkdir(parents=True, exist_ok=True)
+    partial_path = report_dir / "llm-results.partial.json"
+
+    def checkpoint(stage: str) -> None:
+        partial = {
+            "model": model,
+            "provider": "ollama" if args.ollama else "anthropic",
+            "preview": args.preview,
+            "stage_completed": stage,
+            "run_at_utc": datetime.now(timezone.utc).isoformat(),
+            "trials": trials,
+            "case_counts": dict(Counter(case.category for case in cases)),
+            "estimate": estimate,
+            "baseline": baseline,
+            "variance": variance,
+            "adaptive": adaptive,
+            "calibration": calibration,
+            "usage": _usage_and_cost(clients, prices)[0],
+            "actual_cost": _usage_and_cost(clients, prices)[1],
+        }
+        partial_path.write_text(
+            json.dumps(partial, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+
+    checkpoint("initialized")
     primary = run_llm_benchmark(
         cases,
         benchmark_factory,
@@ -419,6 +526,7 @@ def run_cli(
     )
     for condition, result in detector_extractor["conditions"].items():
         baseline[condition] = _metric(result)
+    checkpoint("baseline")
 
     variance_runs: dict[str, list[dict[str, float]]] = {"C0": [], "C3": []}
     for _trial in range(trials):
@@ -444,8 +552,8 @@ def run_cli(
         }
         for condition, metrics in variance_runs.items()
     }
+    checkpoint("variance")
 
-    adaptive: dict[str, object] = {}
     for condition in ("C1", "C3", "C4"):
         defense_summary = DEFENSE_SUMMARIES[condition]
         paraphrased = [
@@ -461,6 +569,23 @@ def run_cli(
             extractor_client_factory=extractor_factory if condition == "C4" else None,
         )
         adaptive[condition] = _metric(adaptive_run["conditions"][condition])
+    checkpoint("adaptive")
+
+    calibration_run = run_llm_benchmark(
+        probe_cases(),
+        benchmark_factory,
+        conditions=("C0", "C3", "C4"),
+        max_usd=args.max_usd,
+        model_price=prices,
+        extractor_client_factory=extractor_factory,
+    )
+    for condition, condition_result in calibration_run["conditions"].items():
+        calibration[condition] = {
+            "instruction_follow_rate": float(condition_result["probe_ifr"] or 0.0),
+            "followed": int(condition_result["probe_followed"]),
+            "cases": int(condition_result["probe_cases"]),
+        }
+    checkpoint("calibration")
 
     successful_attack_cases: list[dict[str, str]] = []
     for measurement, table in (("baseline", baseline), ("adaptive", adaptive)):
@@ -475,28 +600,7 @@ def run_cli(
                         }
                     )
 
-    usage = {
-        "input_tokens": sum(
-            int(getattr(client, "usage_totals", {}).get("input_tokens", 0))
-            for client in clients
-        ),
-        "output_tokens": sum(
-            int(getattr(client, "usage_totals", {}).get("output_tokens", 0))
-            for client in clients
-        ),
-    }
-    actual_cost = {
-        "input_usd": usage["input_tokens"] * prices["input_usd_per_million"] / 1_000_000,
-        "output_usd": usage["output_tokens"] * prices["output_usd_per_million"] / 1_000_000,
-        "total_usd": (
-            usage["input_tokens"] * prices["input_usd_per_million"]
-            + usage["output_tokens"] * prices["output_usd_per_million"]
-        )
-        / 1_000_000,
-        "input_usd_per_million": prices["input_usd_per_million"],
-        "output_usd_per_million": prices["output_usd_per_million"],
-        "price_source": prices["source"],
-    }
+    usage, actual_cost = _usage_and_cost(clients, prices)
     results: dict[str, object] = {
         "model": model,
         "provider": "ollama" if args.ollama else "anthropic",
@@ -508,12 +612,12 @@ def run_cli(
         "baseline": baseline,
         "variance": variance,
         "adaptive": adaptive,
+        "calibration": calibration,
         "usage": usage,
         "actual_cost": actual_cost,
         "successful_attack_cases": successful_attack_cases,
     }
-    report_dir = Path(output_dir)
-    report_dir.mkdir(parents=True, exist_ok=True)
+    _archive_previous_result(report_dir)
     (report_dir / "llm-results.json").write_text(
         json.dumps(results, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",

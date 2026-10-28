@@ -1,6 +1,8 @@
 import json
 from collections import Counter
 
+import pytest
+
 from taintgate.attribution import UserIntent
 from taintgate.bench2 import BenchCaseV2, convert_cases
 from taintgate.llm_adapt import DEFENSE_SUMMARIES, paraphrase_attack, select_adaptive_cases
@@ -139,3 +141,86 @@ def test_ollama_preview_dry_run_does_not_create_client(tmp_path, capsys) -> None
     assert "Dry run only; no LLM clients were created." in output
     assert created == []
     assert list(tmp_path.iterdir()) == []
+
+
+def _stub_metrics(conditions, cases):
+    metrics = {}
+    for condition in conditions:
+        is_probe = bool(cases) and cases[0].category == "probe"
+        metrics[condition] = {
+            "asr": 0.0,
+            "attack_successes": 0,
+            "attack_cases": 0,
+            "utility": 0.0,
+            "utility_successes": 0,
+            "utility_cases": 0,
+            "category_asr": {},
+            "benign_confusing_cases": 0,
+            "benign_confusing_directive_execution_rate": 0.0,
+            "cases": [],
+            "runtime_seconds": 0.0,
+            "probe_followed": 7 if is_probe else 0,
+            "probe_cases": len(cases) if is_probe else 0,
+            "probe_ifr": 7 / len(cases) if is_probe else None,
+        }
+    return {"conditions": metrics}
+
+
+def test_run_cli_records_calibration_results_with_fake_clients(tmp_path, monkeypatch):
+    import scripts.run_llm_bench as bench_script
+
+    def fake_benchmark(cases, client_factory, conditions, **kwargs):
+        del client_factory, kwargs
+        return _stub_metrics(conditions, cases)
+
+    monkeypatch.setattr(bench_script, "run_llm_benchmark", fake_benchmark)
+    monkeypatch.setattr(
+        bench_script,
+        "paraphrase_attack",
+        lambda case, client, defense: case,
+    )
+    run_cli(
+        ["--ollama", "--preview", "--max-usd", "10"],
+        client_builder=lambda model: FakeLLMClient([LLMResponse(text="paraphrase")]),
+        output_dir=tmp_path,
+    )
+
+    result = json.loads((tmp_path / "llm-results.json").read_text(encoding="utf-8"))
+    assert set(result["calibration"]) == {"C0", "C3", "C4"}
+    assert result["calibration"]["C0"] == {
+        "instruction_follow_rate": 0.35,
+        "followed": 7,
+        "cases": 20,
+    }
+    assert "Calibration" in (tmp_path / "phase2-report.md").read_text(encoding="utf-8")
+
+
+def test_run_cli_keeps_partial_checkpoint_when_measurement_raises(tmp_path, monkeypatch):
+    import scripts.run_llm_bench as bench_script
+
+    def failing_benchmark(*args, **kwargs):
+        raise RuntimeError("fake stage failure")
+
+    monkeypatch.setattr(bench_script, "run_llm_benchmark", failing_benchmark)
+    with pytest.raises(RuntimeError, match="fake stage failure"):
+        run_cli(
+            ["--ollama", "--preview", "--max-usd", "10"],
+            client_builder=lambda model: FakeLLMClient([]),
+            output_dir=tmp_path,
+        )
+
+    partial = json.loads((tmp_path / "llm-results.partial.json").read_text(encoding="utf-8"))
+    assert partial["stage_completed"] == "initialized"
+
+
+def test_existing_model_results_are_archived_before_overwrite(tmp_path):
+    from scripts.run_llm_bench import _archive_previous_result
+
+    original = '{"model": "qwen2.5:7b", "preview": true}\n'
+    result_path = tmp_path / "llm-results.json"
+    result_path.write_text(original, encoding="utf-8")
+
+    archived = _archive_previous_result(tmp_path)
+
+    assert archived == tmp_path / "llm-results.qwen2.5-7b.json"
+    assert archived.read_text(encoding="utf-8") == original

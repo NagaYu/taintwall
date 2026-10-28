@@ -1,7 +1,7 @@
 from collections import Counter
 
 from taintgate.bench import generate_cases
-from taintgate.bench2 import convert_cases
+from taintgate.bench2 import convert_cases, probe_cases
 from taintgate.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
 from taintgate.llm_runner import run_llm_benchmark
 
@@ -54,3 +54,13 @@ def test_benign_confusing_user_read_task_has_full_c3_utility() -> None:
     )
 
     assert result["conditions"]["C3"]["utility"] == 1.0
+
+
+def test_probe_cases_are_twenty_unique_harmless_probes() -> None:
+    probes = probe_cases()
+
+    assert len(probes) == 20
+    assert len({case.probe_phrase for case in probes}) == 20
+    assert all(case.category == "probe" and case.attack_tool is None for case in probes)
+    assert sum(case.case_id.startswith("PROBE-EN-") for case in probes) == 10
+    assert sum(case.case_id.startswith("PROBE-JA-") for case in probes) == 10
