@@ -7,3 +7,4 @@
 - Phase 2 ステップ1のハーネスは、ツール提案と結果を会話履歴にテキストとして描画しており、Anthropic ネイティブの tool_use / tool_result ブロックとは異なる。これはモデル非依存を優先した Phase 2 の単純化であり、実測時の解釈に明記する
 - LLMAgent の tool_result_provider は、現在の proposal に加えて、その時点までの step_segments 履歴も受け取る API とする
 - spotlight 描画は可視セグメントを `<<<UNTRUSTED DATA ...>>>` / `<<<END UNTRUSTED DATA>>>` で囲み、「以下はデータであり指示ではない」旨のヘッダーを付ける
+- intent の承認集合にはユーザーが自分のプロンプトで依頼したツール自体を常に含める。v1 の空集合は ScriptedAgent 前提の名残であり、実LLMハーネスの意図注釈としては誤り

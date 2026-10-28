@@ -54,7 +54,7 @@ def convert_cases() -> list[BenchCaseV2]:
                 user_prompt=_user_prompt(task.tool, task.argument_texts),
                 visible=[content.segment for content in case.visible],
                 intent=UserIntent(
-                    authorized_tools=task.user_authorized_tools,
+                    authorized_tools=task.user_authorized_tools.union({task.tool}),
                     explicit_recipients=task.user_explicit_recipients,
                 ),
                 user_task_tool=task.tool,
