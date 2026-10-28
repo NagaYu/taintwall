@@ -8,3 +8,4 @@
 - LLMAgent の tool_result_provider は、現在の proposal に加えて、その時点までの step_segments 履歴も受け取る API とする
 - spotlight 描画は可視セグメントを `<<<UNTRUSTED DATA ...>>>` / `<<<END UNTRUSTED DATA>>>` で囲み、「以下はデータであり指示ではない」旨のヘッダーを付ける
 - intent の承認集合にはユーザーが自分のプロンプトで依頼したツール自体を常に含める。v1 の空集合は ScriptedAgent 前提の名残であり、実LLMハーネスの意図注釈としては誤り
+- 抽出は消毒ではない。taint 根は保持され、requested_actions は未承認なら実行経路に乗らない
