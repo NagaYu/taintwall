@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
-from taintgate.bench2 import BenchCaseV2, convert_cases, probe_cases
+from taintgate.bench2 import BenchCaseV2, convert_cases, probe_cases, procedure_cases
 from taintgate.llm_adapt import DEFENSE_SUMMARIES, paraphrase_attack, select_adaptive_cases
 from taintgate.llm_client import (
     DEFAULT_ANTHROPIC_MODEL,
@@ -23,6 +23,7 @@ from taintgate.ollama_client import OLLAMA_DEFAULT_MODEL, OllamaClient
 
 REPORTS_DIR = Path(__file__).resolve().parents[1] / "reports"
 DEFAULT_TRIALS = 3
+BENCHMARK_SECTIONS = ("baseline", "variance", "adaptive", "calibration", "procedure")
 MODEL_PRICES = {
     # Anthropic list prices per million tokens; sources checked 2026-10-28.
     DEFAULT_ANTHROPIC_MODEL: {
@@ -41,7 +42,24 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--trials", type=int, default=DEFAULT_TRIALS, help="variance trial count")
     parser.add_argument("--ollama", action="store_true", help="use a local Ollama server at localhost")
     parser.add_argument("--preview", action="store_true", help="use the deterministic preview subset")
+    parser.add_argument(
+        "--sections",
+        default=",".join(BENCHMARK_SECTIONS),
+        help="comma-separated stages to run: " + ",".join(BENCHMARK_SECTIONS),
+    )
     return parser.parse_args(argv)
+
+
+def parse_sections(value: str) -> tuple[str, ...]:
+    selected = tuple(part.strip() for part in value.split(",") if part.strip())
+    unknown = sorted(set(selected) - set(BENCHMARK_SECTIONS))
+    if unknown:
+        raise ValueError(f"unknown section(s): {', '.join(unknown)}")
+    if not selected:
+        raise ValueError("--sections must select at least one stage")
+    if len(set(selected)) != len(selected):
+        raise ValueError("--sections must not contain duplicates")
+    return selected
 
 
 def _select_core_cases(cases: Sequence[BenchCaseV2]) -> list[BenchCaseV2]:
@@ -110,6 +128,7 @@ def estimate_plan(
     prices: dict[str, float],
     *,
     preview: bool = False,
+    sections: Sequence[str] = BENCHMARK_SECTIONS,
 ) -> dict[str, object]:
     """Approximate all benchmark, variance, paraphrase, and extractor calls up front."""
 
@@ -131,39 +150,49 @@ def estimate_plan(
         ]
         core = _select_core_cases(cases)
         adaptive = select_adaptive_cases(cases)
-    estimates = [
-        _estimate_entry(dev_cases, ("C0", "C2", "C3"), prices),
-        _estimate_entry(attack_and_confusing, ("C1", "C4"), prices),
-        _estimate_entry(probe_cases(), ("C0", "C3", "C4"), prices),
-    ]
-    estimates.extend(
-        _estimate_entry(core, (condition,), prices)
-        for _ in range(trials)
-        for condition in ("C0", "C3")
-    )
-    estimates.extend(
-        _estimate_entry(adaptive, (condition,), prices)
-        for condition in ("C1", "C3", "C4")
-    )
+    selected = set(sections)
+    estimates: list[dict[str, float | int]] = []
+    if "baseline" in selected:
+        estimates.extend(
+            [
+                _estimate_entry(dev_cases, ("C0", "C2", "C3"), prices),
+                _estimate_entry(attack_and_confusing, ("C1", "C4"), prices),
+            ]
+        )
+    if "calibration" in selected:
+        estimates.append(_estimate_entry(probe_cases(), ("C0", "C3", "C4"), prices))
+    if "procedure" in selected:
+        estimates.append(_estimate_entry(procedure_cases(), ("C0", "C1", "C2", "C3", "C4"), prices))
+    if "variance" in selected:
+        estimates.extend(
+            _estimate_entry(core, (condition,), prices)
+            for _ in range(trials)
+            for condition in ("C0", "C3")
+        )
+    if "adaptive" in selected:
+        estimates.extend(
+            _estimate_entry(adaptive, (condition,), prices)
+            for condition in ("C1", "C3", "C4")
+        )
 
-    # Each defense gets one attacker paraphrase call per selected case.
-    paraphrase_calls = len(adaptive) * 3
-    paraphrase_input_tokens = sum(
-        len(case.user_prompt) + sum(len(segment.text) for segment in case.visible) + 1800
-        for case in adaptive
-    ) * 3 // 4
-    paraphrase_output_tokens = paraphrase_calls * 256
-    estimates.append(
-        {
-            "input_tokens": paraphrase_input_tokens,
-            "output_tokens": paraphrase_output_tokens,
-            "estimated_usd": (
-                paraphrase_input_tokens * prices["input_usd_per_million"]
-                + paraphrase_output_tokens * prices["output_usd_per_million"]
-            )
-            / 1_000_000,
-        }
-    )
+        # Each defense gets one attacker paraphrase call per selected case.
+        paraphrase_calls = len(adaptive) * 3
+        paraphrase_input_tokens = sum(
+            len(case.user_prompt) + sum(len(segment.text) for segment in case.visible) + 1800
+            for case in adaptive
+        ) * 3 // 4
+        paraphrase_output_tokens = paraphrase_calls * 256
+        estimates.append(
+            {
+                "input_tokens": paraphrase_input_tokens,
+                "output_tokens": paraphrase_output_tokens,
+                "estimated_usd": (
+                    paraphrase_input_tokens * prices["input_usd_per_million"]
+                    + paraphrase_output_tokens * prices["output_usd_per_million"]
+                )
+                / 1_000_000,
+            }
+        )
     input_tokens = sum(int(item["input_tokens"]) for item in estimates)
     output_tokens = sum(int(item["output_tokens"]) for item in estimates)
     return {
@@ -255,12 +284,15 @@ def _phase2_report(results: dict[str, object]) -> str:
     usage = results["usage"]
     costs = results["actual_cost"]
     calibration = results["calibration"]
+    procedure = results["procedure"]
     assert isinstance(baseline, dict)
     assert isinstance(adaptive, dict)
     assert isinstance(variance, dict)
     assert isinstance(usage, dict)
     assert isinstance(costs, dict)
     assert isinstance(calibration, dict)
+    assert isinstance(procedure, dict)
+    requested = set(results.get("sections_requested", BENCHMARK_SECTIONS))
     lines = [
         "# Phase 2 Measurement Report",
         "",
@@ -285,6 +317,8 @@ def _phase2_report(results: dict[str, object]) -> str:
         "|---|---:|---:|---:|",
         ]
     )
+    if not baseline:
+        lines.append("Baseline: not run (section not selected).")
     for condition in ("C0", "C1", "C2", "C3", "C4"):
         if condition not in baseline:
             continue
@@ -315,6 +349,8 @@ def _phase2_report(results: dict[str, object]) -> str:
         lines.append(
             f"| {condition} | {item['attack_successes']} / {item['attack_cases']} | {item['asr']:.3f} |"
         )
+    if not adaptive:
+        lines.append("Adaptive: not run (section not selected).")
     lines.extend(
         [
             "",
@@ -329,6 +365,8 @@ def _phase2_report(results: dict[str, object]) -> str:
             f"| {condition} | {item['instruction_follow_rate']:.3f} | "
             f"{item['followed']} / {item['cases']} |"
         )
+    if not calibration:
+        lines.append("Calibration: not run (section not selected).")
     lines.extend(
         [
             "",
@@ -341,6 +379,33 @@ def _phase2_report(results: dict[str, object]) -> str:
             f"| {condition} | {item['asr_min']:.3f}–{item['asr_max']:.3f} | "
             f"{item['utility_min']:.3f}–{item['utility_max']:.3f} | {item['trials']} |"
         )
+    if not variance:
+        lines.append("Variance: not run (section not selected).")
+    lines.extend(
+        [
+            "",
+            "## Task-embedded (procedure) attacks",
+            "",
+            "| Condition | ASR | Attack successes / cases | Utility | Utility successes / cases |",
+            "|---|---:|---:|---:|---:|",
+        ]
+    )
+    if procedure:
+        for condition in ("C0", "C1", "C2", "C3", "C4"):
+            item = procedure.get(condition)
+            if item is None:
+                continue
+            lines.append(
+                f"| {condition} | {item['asr']:.3f} | "
+                f"{item['attack_successes']} / {item['attack_cases']} | "
+                f"{item['utility']:.3f} | {item['utility_successes']} / {item['utility_cases']} |"
+            )
+    else:
+        lines.append("| not run (section not selected) | — | — | — | — |")
+    lines.extend(["", "## Section status", ""])
+    for section in BENCHMARK_SECTIONS:
+        status = "selected" if section in requested else "not run (not selected)"
+        lines.append(f"- {section}: {status}")
     leaks = results["successful_attack_cases"]
     lines.extend(
         [
@@ -382,7 +447,9 @@ def _print_summary(results: dict[str, object]) -> None:
     baseline = results["baseline"]
     adaptive = results["adaptive"]
     costs = results["actual_cost"]
+    procedure = results["procedure"]
     assert isinstance(baseline, dict) and isinstance(adaptive, dict) and isinstance(costs, dict)
+    assert isinstance(procedure, dict)
     if results.get("preview") and results.get("provider") == "ollama":
         print(f"PREVIEW — local model (Ollama), no API cost — model: {results['model']}")
     else:
@@ -397,6 +464,12 @@ def _print_summary(results: dict[str, object]) -> None:
         adapted_asr = f"{adapted['asr']:.3f}" if adapted else "—"
         print(f"{condition} | {asr} | {utility} | {adapted_asr}")
     print(f"Total actual cost: ${costs['total_usd']:.6f}")
+    if procedure:
+        print("Procedure ASR | Utility")
+        for condition in ("C0", "C1", "C2", "C3", "C4"):
+            item = procedure.get(condition)
+            if item:
+                print(f"{condition} | {item['asr']:.3f} | {item['utility']:.3f}")
 
 
 def run_cli(
@@ -410,6 +483,7 @@ def run_cli(
         raise ValueError("--max-usd must be greater than zero")
     if args.trials < 1:
         raise ValueError("--trials must be at least 1")
+    selected_sections = parse_sections(args.sections)
     model = args.model or (OLLAMA_DEFAULT_MODEL if args.ollama else DEFAULT_ANTHROPIC_MODEL)
     if args.ollama:
         prices = {
@@ -441,7 +515,13 @@ def run_cli(
         plan["adaptive"] if plan is not None else select_adaptive_cases(all_cases)
     )
     trials = 1 if args.preview else args.trials
-    estimate = estimate_plan(all_cases, trials, prices, preview=args.preview)
+    estimate = estimate_plan(
+        all_cases,
+        trials,
+        prices,
+        preview=args.preview,
+        sections=selected_sections,
+    )
     print(
         "APPROXIMATE total plan estimate: "
         f"{estimate['total_tokens_estimate']} tokens, ${estimate['estimated_usd']:.6f} "
@@ -479,6 +559,7 @@ def run_cli(
     variance: dict[str, object] = {}
     adaptive: dict[str, object] = {}
     calibration: dict[str, object] = {}
+    procedure: dict[str, object] = {}
     report_dir = Path(output_dir)
     report_dir.mkdir(parents=True, exist_ok=True)
     partial_path = report_dir / "llm-results.partial.json"
@@ -497,6 +578,8 @@ def run_cli(
             "variance": variance,
             "adaptive": adaptive,
             "calibration": calibration,
+            "procedure": procedure,
+            "sections_requested": list(selected_sections),
             "usage": _usage_and_cost(clients, prices)[0],
             "actual_cost": _usage_and_cost(clients, prices)[1],
         }
@@ -506,89 +589,106 @@ def run_cli(
         )
 
     checkpoint("initialized")
-    primary = run_llm_benchmark(
-        cases,
-        benchmark_factory,
-        conditions=("C0", "C2", "C3"),
-        max_usd=args.max_usd,
-        model_price=prices,
-    )
-    for condition, result in primary["conditions"].items():
-        baseline[condition] = _metric(result)
+    if "baseline" in selected_sections:
+        primary = run_llm_benchmark(
+            cases,
+            benchmark_factory,
+            conditions=("C0", "C2", "C3"),
+            max_usd=args.max_usd,
+            model_price=prices,
+        )
+        for condition, result in primary["conditions"].items():
+            baseline[condition] = _metric(result)
 
-    detector_extractor = run_llm_benchmark(
-        selected_150,
-        benchmark_factory,
-        conditions=("C1", "C4"),
-        max_usd=args.max_usd,
-        model_price=prices,
-        extractor_client_factory=extractor_factory,
-    )
-    for condition, result in detector_extractor["conditions"].items():
-        baseline[condition] = _metric(result)
-    checkpoint("baseline")
+        detector_extractor = run_llm_benchmark(
+            selected_150,
+            benchmark_factory,
+            conditions=("C1", "C4"),
+            max_usd=args.max_usd,
+            model_price=prices,
+            extractor_client_factory=extractor_factory,
+        )
+        for condition, result in detector_extractor["conditions"].items():
+            baseline[condition] = _metric(result)
+        checkpoint("baseline")
 
-    variance_runs: dict[str, list[dict[str, float]]] = {"C0": [], "C3": []}
-    for _trial in range(trials):
-        for condition in ("C0", "C3"):
-            trial_result = run_llm_benchmark(
-                core,
+    if "variance" in selected_sections:
+        variance_runs: dict[str, list[dict[str, float]]] = {"C0": [], "C3": []}
+        for _trial in range(trials):
+            for condition in ("C0", "C3"):
+                trial_result = run_llm_benchmark(
+                    core,
+                    benchmark_factory,
+                    conditions=(condition,),
+                    max_usd=args.max_usd,
+                    model_price=prices,
+                )["conditions"][condition]
+                variance_runs[condition].append(
+                    {"asr": float(trial_result["asr"]), "utility": float(trial_result["utility"])}
+                )
+        variance = {
+            condition: {
+                "trials": len(metrics),
+                "asr_min": min(item["asr"] for item in metrics),
+                "asr_max": max(item["asr"] for item in metrics),
+                "utility_min": min(item["utility"] for item in metrics),
+                "utility_max": max(item["utility"] for item in metrics),
+                "runs": metrics,
+            }
+            for condition, metrics in variance_runs.items()
+        }
+        checkpoint("variance")
+
+    if "adaptive" in selected_sections:
+        for condition in ("C1", "C3", "C4"):
+            defense_summary = DEFENSE_SUMMARIES[condition]
+            paraphrased = [
+                paraphrase_attack(case, new_client(), defense_summary)
+                for case in adaptive_base
+            ]
+            adaptive_run = run_llm_benchmark(
+                paraphrased,
                 benchmark_factory,
                 conditions=(condition,),
                 max_usd=args.max_usd,
                 model_price=prices,
-            )["conditions"][condition]
-            variance_runs[condition].append(
-                {"asr": float(trial_result["asr"]), "utility": float(trial_result["utility"])}
+                extractor_client_factory=extractor_factory if condition == "C4" else None,
             )
-    variance = {
-        condition: {
-            "trials": len(metrics),
-            "asr_min": min(item["asr"] for item in metrics),
-            "asr_max": max(item["asr"] for item in metrics),
-            "utility_min": min(item["utility"] for item in metrics),
-            "utility_max": max(item["utility"] for item in metrics),
-            "runs": metrics,
-        }
-        for condition, metrics in variance_runs.items()
-    }
-    checkpoint("variance")
+            adaptive[condition] = _metric(adaptive_run["conditions"][condition])
+        checkpoint("adaptive")
 
-    for condition in ("C1", "C3", "C4"):
-        defense_summary = DEFENSE_SUMMARIES[condition]
-        paraphrased = [
-            paraphrase_attack(case, new_client(), defense_summary)
-            for case in adaptive_base
-        ]
-        adaptive_run = run_llm_benchmark(
-            paraphrased,
+    if "calibration" in selected_sections:
+        calibration_run = run_llm_benchmark(
+            probe_cases(),
             benchmark_factory,
-            conditions=(condition,),
+            conditions=("C0", "C3", "C4"),
             max_usd=args.max_usd,
             model_price=prices,
-            extractor_client_factory=extractor_factory if condition == "C4" else None,
+            extractor_client_factory=extractor_factory,
         )
-        adaptive[condition] = _metric(adaptive_run["conditions"][condition])
-    checkpoint("adaptive")
+        for condition, condition_result in calibration_run["conditions"].items():
+            calibration[condition] = {
+                "instruction_follow_rate": float(condition_result["probe_ifr"] or 0.0),
+                "followed": int(condition_result["probe_followed"]),
+                "cases": int(condition_result["probe_cases"]),
+            }
+        checkpoint("calibration")
 
-    calibration_run = run_llm_benchmark(
-        probe_cases(),
-        benchmark_factory,
-        conditions=("C0", "C3", "C4"),
-        max_usd=args.max_usd,
-        model_price=prices,
-        extractor_client_factory=extractor_factory,
-    )
-    for condition, condition_result in calibration_run["conditions"].items():
-        calibration[condition] = {
-            "instruction_follow_rate": float(condition_result["probe_ifr"] or 0.0),
-            "followed": int(condition_result["probe_followed"]),
-            "cases": int(condition_result["probe_cases"]),
-        }
-    checkpoint("calibration")
+    if "procedure" in selected_sections:
+        procedure_run = run_llm_benchmark(
+            procedure_cases(),
+            benchmark_factory,
+            conditions=("C0", "C1", "C2", "C3", "C4"),
+            max_usd=args.max_usd,
+            model_price=prices,
+            extractor_client_factory=extractor_factory,
+        )
+        for condition, condition_result in procedure_run["conditions"].items():
+            procedure[condition] = _metric(condition_result)
+        checkpoint("procedure")
 
     successful_attack_cases: list[dict[str, str]] = []
-    for measurement, table in (("baseline", baseline), ("adaptive", adaptive)):
+    for measurement, table in (("baseline", baseline), ("adaptive", adaptive), ("procedure", procedure)):
         for condition, result in table.items():
             for case_result in result["cases"]:
                 if case_result["attack_succeeded"]:
@@ -613,6 +713,8 @@ def run_cli(
         "variance": variance,
         "adaptive": adaptive,
         "calibration": calibration,
+        "procedure": procedure,
+        "sections_requested": list(selected_sections),
         "usage": usage,
         "actual_cost": actual_cost,
         "successful_attack_cases": successful_attack_cases,

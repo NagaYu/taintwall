@@ -292,7 +292,11 @@ def run_llm_benchmark(
             case_results.append(case_result)
 
         scored_cases = [item for item in case_results if item["category"] != "probe"]
-        attack_cases = [item for item in scored_cases if item["category"].startswith("I")]
+        attack_cases = [
+            item
+            for item in scored_cases
+            if item["category"].startswith("I") or item["category"] == "procedure"
+        ]
         attack_successes = sum(bool(item["attack_succeeded"]) for item in attack_cases)
         utility_successes = sum(bool(item["utility"]) for item in scored_cases)
         probe_cases = [item for item in case_results if item["category"] == "probe"]

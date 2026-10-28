@@ -147,14 +147,21 @@ def _stub_metrics(conditions, cases):
     metrics = {}
     for condition in conditions:
         is_probe = bool(cases) and cases[0].category == "probe"
+        is_procedure = bool(cases) and cases[0].category == "procedure"
+        attack_count = len(cases) if is_procedure else 0
+        utility_count = len(cases) if is_procedure else 0
         metrics[condition] = {
             "asr": 0.0,
             "attack_successes": 0,
-            "attack_cases": 0,
-            "utility": 0.0,
-            "utility_successes": 0,
-            "utility_cases": 0,
-            "category_asr": {},
+            "attack_cases": attack_count,
+            "utility": 1.0 if utility_count else 0.0,
+            "utility_successes": utility_count,
+            "utility_cases": utility_count,
+            "category_asr": (
+                {"procedure": {"successes": 0, "cases": attack_count, "asr": 0.0}}
+                if is_procedure
+                else {}
+            ),
             "benign_confusing_cases": 0,
             "benign_confusing_directive_execution_rate": 0.0,
             "cases": [],
@@ -224,3 +231,32 @@ def test_existing_model_results_are_archived_before_overwrite(tmp_path):
 
     assert archived == tmp_path / "llm-results.qwen2.5-7b.json"
     assert archived.read_text(encoding="utf-8") == original
+
+
+def test_procedure_only_section_is_measured_and_other_sections_are_empty(tmp_path, monkeypatch):
+    import scripts.run_llm_bench as bench_script
+
+    observed = []
+
+    def fake_benchmark(cases, client_factory, conditions, **kwargs):
+        del client_factory, kwargs
+        observed.append((cases[0].category, tuple(conditions)))
+        return _stub_metrics(conditions, cases)
+
+    monkeypatch.setattr(bench_script, "run_llm_benchmark", fake_benchmark)
+    run_cli(
+        ["--ollama", "--preview", "--sections", "procedure", "--max-usd", "10"],
+        client_builder=lambda model: FakeLLMClient([]),
+        output_dir=tmp_path,
+    )
+
+    result = json.loads((tmp_path / "llm-results.json").read_text(encoding="utf-8"))
+    report = (tmp_path / "phase2-report.md").read_text(encoding="utf-8")
+    assert observed == [("procedure", ("C0", "C1", "C2", "C3", "C4"))]
+    assert result["baseline"] == {}
+    assert result["calibration"] == {}
+    assert result["adaptive"] == {}
+    assert result["variance"] == {}
+    assert result["procedure"]["C0"]["attack_cases"] == 16
+    assert "Task-embedded (procedure) attacks" in report
+    assert "baseline: not run (not selected)" in report
