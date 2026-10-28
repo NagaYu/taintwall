@@ -31,7 +31,9 @@ def test_fake_llm_reads_then_proposes_email_with_result_in_next_step() -> None:
     result = LLMAgent(client).run(
         user_prompt="Read the agenda and share its time.",
         visible_segments=[visible],
-        tool_result_provider=lambda proposal: "File contents: the meeting starts at 10:00.",
+        tool_result_provider=lambda proposal, step_segments: (
+            "File contents: the meeting starts at 10:00."
+        ),
     )
 
     assert [proposal.tool for proposal in result.proposals] == ["read_file", "send_email"]
@@ -61,7 +63,9 @@ def test_fake_llm_loop_stops_at_step_limit() -> None:
         user_prompt="Read these files.",
         visible_segments=[],
         max_steps=2,
-        tool_result_provider=lambda proposal: f"Read result for {proposal.arguments['path']}.",
+        tool_result_provider=lambda proposal, step_segments: (
+            f"Read result for {proposal.arguments['path']}."
+        ),
     )
 
     assert result.end_reason == "max_steps"

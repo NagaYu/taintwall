@@ -1,7 +1,7 @@
 """Tool-loop harness for LLM clients; step 1 records proposals without executing tools."""
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 from taintgate.llm_client import LLMClient, ToolCallProposal
@@ -118,7 +118,10 @@ class LLMAgent:
         visible_segments: Sequence[Segment],
         tools: Sequence[dict[str, Any]] = MOCK_TOOL_DEFINITIONS,
         max_steps: int = 6,
-        tool_result_provider: Callable[[ToolCallProposal], str] | None = None,
+        tool_result_provider: Callable[
+            [ToolCallProposal, Sequence[Sequence[Segment]]], str
+        ]
+        | None = None,
     ) -> LLMAgentResult:
         if max_steps < 1:
             raise ValueError("max_steps must be at least 1")
@@ -159,7 +162,10 @@ class LLMAgent:
                             "Tool result pending: step 1 records proposals but does not execute tools."
                         )
                     else:
-                        result_text = tool_result_provider(proposal)
+                        result_text = tool_result_provider(
+                            proposal,
+                            [list(step) for step in step_segments],
+                        )
                         if not isinstance(result_text, str):
                             raise TypeError("tool_result_provider must return text")
                     result_segment = Segment(
