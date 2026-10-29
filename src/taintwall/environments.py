@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from taintgate.provenance import Origin, Segment
+from taintwall.provenance import Origin, Segment
 
 
 @dataclass(frozen=True)

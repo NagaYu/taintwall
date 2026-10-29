@@ -2,10 +2,10 @@
 
 from dataclasses import dataclass, replace
 
-from taintgate.boundary import ExecutionResult, GuardedExecutor
-from taintgate.environments import VisibleContent
-from taintgate.policy import ToolCall
-from taintgate.provenance import Origin, Segment, derive
+from taintwall.boundary import ExecutionResult, GuardedExecutor
+from taintwall.environments import VisibleContent
+from taintwall.policy import ToolCall
+from taintwall.provenance import Origin, Segment, derive
 
 
 @dataclass(frozen=True)

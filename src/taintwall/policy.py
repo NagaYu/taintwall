@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from taintgate.provenance import ProvenanceExplanation, Segment, explain
+from taintwall.provenance import ProvenanceExplanation, Segment, explain
 
 
 ALLOW = "ALLOW"

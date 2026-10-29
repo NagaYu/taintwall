@@ -4,7 +4,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
-from taintgate.bench import CATEGORY_COUNTS, generate_cases, write_cases
+from taintwall.bench import CATEGORY_COUNTS, generate_cases, write_cases
 
 
 def test_simulated_bench_has_exact_total_and_category_counts() -> None:

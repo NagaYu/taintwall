@@ -1,7 +1,7 @@
 import pytest
 
-from taintgate.llm_client import ToolCallProposal
-from taintgate.ollama_client import OllamaClient
+from taintwall.llm_client import ToolCallProposal
+from taintwall.ollama_client import OllamaClient
 
 
 def test_ollama_request_translation_tool_calls_and_usage_accumulation() -> None:

@@ -7,8 +7,8 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-from taintgate.llm_client import ToolCallProposal
-from taintgate.provenance import Origin, Segment, derive
+from taintwall.llm_client import ToolCallProposal
+from taintwall.provenance import Origin, Segment, derive
 
 
 DESTINATION_NAMES = frozenset({"to", "url", "recipient", "destination"})

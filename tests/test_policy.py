@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from taintgate.policy import (
+from taintwall.policy import (
     ALLOW,
     ALLOW_WITH_REDACTION,
     BLOCK,
@@ -8,7 +8,7 @@ from taintgate.policy import (
     PolicyEngine,
     ToolCall,
 )
-from taintgate.provenance import Origin, Segment
+from taintwall.provenance import Origin, Segment
 
 
 def segment(

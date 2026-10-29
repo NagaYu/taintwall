@@ -2,12 +2,12 @@
 
 from typing import Protocol, Sequence
 
-from taintgate.attribution import UserIntent, attribute_arguments, plan_segment
-from taintgate.boundary import ExecutionResult, GuardedExecutor
-from taintgate.llm_client import ToolCallProposal
-from taintgate.policy import REQUIRE_APPROVAL, ToolCall
-from taintgate.provenance import Segment
-from taintgate.runner import UnguardedExecutor
+from taintwall.attribution import UserIntent, attribute_arguments, plan_segment
+from taintwall.boundary import ExecutionResult, GuardedExecutor
+from taintwall.llm_client import ToolCallProposal
+from taintwall.policy import REQUIRE_APPROVAL, ToolCall
+from taintwall.provenance import Segment
+from taintwall.runner import UnguardedExecutor
 
 
 class Executor(Protocol):

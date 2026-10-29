@@ -5,13 +5,13 @@ import time
 from dataclasses import dataclass, replace
 from typing import Iterable
 
-from taintgate.agent import ScriptedAgent
-from taintgate.bench import DEFAULT_SEED, BenchCase, generate_cases
-from taintgate.boundary import ExecutionResult, GuardedExecutor
-from taintgate.environments import VisibleContent
-from taintgate.policy import ALLOW, DESTINATION_ARGUMENTS, Decision, PolicyEngine, ToolCall
-from taintgate.provenance import Origin, Segment
-from taintgate.tools import MockTools
+from taintwall.agent import ScriptedAgent
+from taintwall.bench import DEFAULT_SEED, BenchCase, generate_cases
+from taintwall.boundary import ExecutionResult, GuardedExecutor
+from taintwall.environments import VisibleContent
+from taintwall.policy import ALLOW, DESTINATION_ARGUMENTS, Decision, PolicyEngine, ToolCall
+from taintwall.provenance import Origin, Segment
+from taintwall.tools import MockTools
 
 
 CONDITIONS = ("C0", "C1", "C2", "C3")
@@ -19,7 +19,7 @@ CONDITION_NAMES = {
     "C0": "raw",
     "C1": "detector-only",
     "C2": "spotlighting-only",
-    "C3": "taintgate",
+    "C3": "taintwall",
 }
 DETECTOR_KEYWORDS = (
     "ignore", "forward", "send", "post", "save", "instruction", "execute", "run",

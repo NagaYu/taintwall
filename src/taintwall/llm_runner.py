@@ -5,16 +5,16 @@ import unicodedata
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
-from taintgate.bench2 import BenchCaseV2
-from taintgate.boundary import ExecutionResult, GuardedExecutor
-from taintgate.extractor import extract_segment
-from taintgate.llm_agent import LLMAgent
-from taintgate.llm_boundary import AttributingExecutor
-from taintgate.llm_client import LLMClient
-from taintgate.policy import ToolCall, PolicyEngine
-from taintgate.provenance import Segment
-from taintgate.runner import CONDITIONS, UnguardedExecutor, detect_injection
-from taintgate.tools import MockTools
+from taintwall.bench2 import BenchCaseV2
+from taintwall.boundary import ExecutionResult, GuardedExecutor
+from taintwall.extractor import extract_segment
+from taintwall.llm_agent import LLMAgent
+from taintwall.llm_boundary import AttributingExecutor
+from taintwall.llm_client import LLMClient
+from taintwall.policy import ToolCall, PolicyEngine
+from taintwall.provenance import Segment
+from taintwall.runner import CONDITIONS, UnguardedExecutor, detect_injection
+from taintwall.tools import MockTools
 
 
 DEFAULT_MODEL_PRICE = {

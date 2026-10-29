@@ -1,11 +1,11 @@
 """SIMULATED deterministic-agent tests measure policy enforcement, not LLM robustness."""
 
-from taintgate.agent import PlannedAction, ScriptedAgent
-from taintgate.boundary import GuardedExecutor
-from taintgate.environments import EmailEnvironment, VisibleContent, WorkspaceEnvironment
-from taintgate.policy import ALLOW, BLOCK, PolicyEngine
-from taintgate.provenance import Origin, derive
-from taintgate.tools import MockTools
+from taintwall.agent import PlannedAction, ScriptedAgent
+from taintwall.boundary import GuardedExecutor
+from taintwall.environments import EmailEnvironment, VisibleContent, WorkspaceEnvironment
+from taintwall.policy import ALLOW, BLOCK, PolicyEngine
+from taintwall.provenance import Origin, derive
+from taintwall.tools import MockTools
 
 
 def test_simulated_raw_injection_is_proposed_for_boundary_enforcement() -> None:

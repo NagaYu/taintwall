@@ -10,15 +10,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Sequence
 
-from taintgate.bench2 import BenchCaseV2, convert_cases, probe_cases, procedure_cases
-from taintgate.llm_adapt import DEFENSE_SUMMARIES, paraphrase_attack, select_adaptive_cases
-from taintgate.llm_client import (
+from taintwall.bench2 import BenchCaseV2, convert_cases, probe_cases, procedure_cases
+from taintwall.llm_adapt import DEFENSE_SUMMARIES, paraphrase_attack, select_adaptive_cases
+from taintwall.llm_client import (
     DEFAULT_ANTHROPIC_MODEL,
     AnthropicClient,
     LLMClient,
 )
-from taintgate.llm_runner import estimate_cost, run_llm_benchmark
-from taintgate.ollama_client import OLLAMA_DEFAULT_MODEL, OllamaClient
+from taintwall.llm_runner import estimate_cost, run_llm_benchmark
+from taintwall.ollama_client import OLLAMA_DEFAULT_MODEL, OllamaClient
 
 
 REPORTS_DIR = Path(__file__).resolve().parents[1] / "reports"
@@ -35,7 +35,7 @@ MODEL_PRICES = {
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Run the local Phase 2 TaintGate benchmark")
+    parser = argparse.ArgumentParser(description="Run the local Phase 2 TaintWall benchmark")
     parser.add_argument("--max-usd", type=float, required=True, help="maximum estimated spend")
     parser.add_argument("--dry-run", action="store_true", help="estimate and exit without creating clients")
     parser.add_argument("--model", default=None, help="model ID (provider default when omitted)")

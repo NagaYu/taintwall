@@ -4,8 +4,8 @@ import json
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
-from taintgate.llm_client import LLMClient, ToolCallProposal
-from taintgate.provenance import Origin, Segment
+from taintwall.llm_client import LLMClient, ToolCallProposal
+from taintwall.provenance import Origin, Segment
 
 
 MOCK_TOOL_DEFINITIONS: list[dict[str, Any]] = [

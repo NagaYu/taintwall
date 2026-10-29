@@ -5,6 +5,7 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
+reports/llm-results.partial.json
 .venv/
 venv/
 dist/

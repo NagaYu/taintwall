@@ -9,8 +9,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from taintgate.bench import DEFAULT_SEED, write_cases  # noqa: E402
-from taintgate.runner import render_gate, render_report, run_benchmark  # noqa: E402
+from taintwall.bench import DEFAULT_SEED, write_cases  # noqa: E402
+from taintwall.runner import render_gate, render_report, run_benchmark  # noqa: E402
 
 
 def main() -> None:

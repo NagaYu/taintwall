@@ -13,7 +13,7 @@ Seed: 20261028. Fixed corpus: 200 cases, including attack n=120.
 | C0 raw | 100.0% | 100.0% | 100.0% | 100.0% | 0.0% (n=18) |
 | C1 detector-only | 9.2% | 100.0% | 100.0% | 66.7% | 100.0% (n=18) |
 | C2 spotlighting-only | 0.0% | 100.0% | 0.0% | 0.0% | 0.0% (n=18) |
-| C3 taintgate | 0.0% | 100.0% | 0.0% | 0.0% | 0.0% (n=18) |
+| C3 taintwall | 0.0% | 100.0% | 0.0% | 0.0% | 0.0% (n=18) |
 
 ## Category ASR
 

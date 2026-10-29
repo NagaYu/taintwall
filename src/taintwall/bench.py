@@ -1,13 +1,13 @@
-"""Deterministic offline InjectBench-Agents dev-case generation (SIMULATED fixtures)."""
+"""Deterministic offline TaintWall Bench dev-case generation (SIMULATED fixtures)."""
 
 import json
 import random
 from dataclasses import dataclass
 from pathlib import Path
 
-from taintgate.agent import PlannedAction
-from taintgate.environments import Directive, VisibleContent
-from taintgate.provenance import Origin, Segment, derive
+from taintwall.agent import PlannedAction
+from taintwall.environments import Directive, VisibleContent
+from taintwall.provenance import Origin, Segment, derive
 
 
 DEFAULT_SEED = 20261028

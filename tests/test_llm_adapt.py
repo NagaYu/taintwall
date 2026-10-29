@@ -3,11 +3,11 @@ from collections import Counter
 
 import pytest
 
-from taintgate.attribution import UserIntent
-from taintgate.bench2 import BenchCaseV2, convert_cases
-from taintgate.llm_adapt import DEFENSE_SUMMARIES, paraphrase_attack, select_adaptive_cases
-from taintgate.llm_client import FakeLLMClient, LLMResponse
-from taintgate.provenance import Origin, Segment
+from taintwall.attribution import UserIntent
+from taintwall.bench2 import BenchCaseV2, convert_cases
+from taintwall.llm_adapt import DEFENSE_SUMMARIES, paraphrase_attack, select_adaptive_cases
+from taintwall.llm_client import FakeLLMClient, LLMResponse
+from taintwall.provenance import Origin, Segment
 from scripts.run_llm_bench import build_preview_plan, run_cli
 
 

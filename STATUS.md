@@ -25,3 +25,7 @@ Phase 2 ステップ7 完了（procedure 攻撃ファミリー、監査修正、
 14B 測定の有効範囲: 実行中測定の procedure セクションは無効。baseline / calibration は有効。再測定は procedure のみ
 Phase 2 ステップ8 完了（最終レポート、GATE2、README 更新）
 Phase 2 完了（GATE2 PASS within evaluated scope; explicit I1–I8 ASR NOT EVALUABLE; holdout NOT RUN）
+Phase 3 ステップ1 完了（改名 TaintWall）
+Phase 3 ステップ3 完了（HF データセット準備、未アップロード）
+Phase 3 ステップ4 完了（HF Space パッケージ準備、未アップロード）
+Phase 3 ステップ4 完了（Static Space パッケージ準備、未アップロード）

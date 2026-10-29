@@ -2,17 +2,17 @@ import pytest
 import json
 import re
 
-from taintgate.attribution import UserIntent
-from taintgate.bench2 import BenchCaseV2, probe_cases, procedure_cases
-from taintgate.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
-from taintgate.llm_runner import (
+from taintwall.attribution import UserIntent
+from taintwall.bench2 import BenchCaseV2, probe_cases, procedure_cases
+from taintwall.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
+from taintwall.llm_runner import (
     BudgetExceededError,
     SPOTLIGHT_SYSTEM_PROMPT,
     dry_run,
     run_llm_benchmark,
 )
-from taintgate.provenance import Origin, Segment
-from taintgate.tools import MockTools
+from taintwall.provenance import Origin, Segment
+from taintwall.tools import MockTools
 
 
 def _case(
@@ -179,7 +179,7 @@ def test_c4_extracts_injection_and_boundary_blocks_requested_external_send(monke
     )
     privileged_clients: list[FakeLLMClient] = []
     mock_tools = MockTools()
-    monkeypatch.setattr("taintgate.llm_runner.MockTools", lambda: mock_tools)
+    monkeypatch.setattr("taintwall.llm_runner.MockTools", lambda: mock_tools)
 
     def client_factory(condition: str, input_case: BenchCaseV2) -> FakeLLMClient:
         client = _proposal_client(proposal)

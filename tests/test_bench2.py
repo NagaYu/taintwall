@@ -1,9 +1,9 @@
 from collections import Counter
 
-from taintgate.bench import generate_cases
-from taintgate.bench2 import convert_cases, probe_cases, procedure_cases
-from taintgate.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
-from taintgate.llm_runner import run_llm_benchmark
+from taintwall.bench import generate_cases
+from taintwall.bench2 import convert_cases, probe_cases, procedure_cases
+from taintwall.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
+from taintwall.llm_runner import run_llm_benchmark
 
 
 def test_v2_conversion_preserves_case_ids_categories_counts_and_attack_tools() -> None:

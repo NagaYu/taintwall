@@ -1,4 +1,4 @@
-from taintgate.provenance import Origin, Segment, derive, explain
+from taintwall.provenance import Origin, Segment, derive, explain
 
 
 def test_trust_is_derived_from_origin() -> None:

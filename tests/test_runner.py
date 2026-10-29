@@ -1,7 +1,7 @@
 """SIMULATED runner tests validate deterministic enforcement, not LLM robustness."""
 
-from taintgate.bench import generate_cases
-from taintgate.runner import (
+from taintwall.bench import generate_cases
+from taintwall.runner import (
     CONDITIONS,
     adapted_cases,
     detect_injection,

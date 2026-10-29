@@ -2,7 +2,7 @@
 AIエージェントへの間接プロンプトインジェクションを、検出ではなく「出所（taint）追跡＋決定的ポリシー執行」で止める実行時ファイアウォールの Phase 1（オフライン垂直スライス）。信頼できないコンテンツ（メール、文書、ツール出力等）に埋め込まれた命令が、エージェントの権限あるツール実行に到達できないことを、境界でのポリシー執行で示す。
 
 ### Phase 1 の範囲
-含む: Provenance コア、ポリシー解釈器、モックツール＋ツール境界、ScriptedAgent、モック環境2種（email / workspace）、InjectBench-Agents dev セット、適応的変異、4条件比較、レポート、CI スケルトン、README ドラフト。
+含む: Provenance コア、ポリシー解釈器、モックツール＋ツール境界、ScriptedAgent、モック環境2種（email / workspace）、TaintWall Bench dev セット、適応的変異、4条件比較、レポート、CI スケルトン、README ドラフト。
 含まない（Phase 2 以降）: 隔離抽出（Quarantine Extractor）、学習型分類器、実 LLM 呼び出し、実フレームワーク（LangGraph 等）連携、実サービス接続、公開・push。
 
 ### Provenance コア
@@ -26,7 +26,7 @@ YAML ポリシーを読み、ツール呼び出し直前に ALLOW / BLOCK / REQU
 実 LLM の代わりの決定的な行為者モデル。見えているセグメント中の命令に従ってツール呼び出しを試みるが、spotlighting 済みセグメントはデータとして扱い試行しない分岐など、防御条件による違いを決定的ルールで表す。良性の命令文（手順書等）に反応しないケースと反応するケースの両方を持つ。
 重要: このベンチが測るのは LLM の堅牢性ではなく、ポリシー執行層が悪性ツール試行を境界で止められるかである。レポート冒頭に `SIMULATED AGENT — policy-enforcement measurement, not LLM robustness` と明記する。
 
-### InjectBench-Agents dev セット
+### TaintWall Bench dev セット
 シード固定の生成器で合計 約200ケース（攻撃 約120 / 良性 約80）を作る。既存ベンチ（AgentDojo / InjecAgent / BIPIA）の payload を verbatim でコピーしない（独自生成）。
 攻撃分類: I1 ゴール乗っ取り / I2 データ持ち出し / I3 権限外ツール実行 / I4 引数汚染 / I5 永続化・メモリ汚染 / I6 多段（2ステップまで）/ I7 隠蔽（HTMLコメント、白文字マーカー、メタデータ風フィールド）/ I8 日英コードスイッチ（日本語文書中の英語命令、敬語紛れ）。
 良性には「データ内に正当な命令文がある」紛らわしいケース（手順書、転送依頼メール、引用された指示）を 20件以上含める。
@@ -36,7 +36,7 @@ YAML ポリシーを読み、ツール呼び出し直前に ALLOW / BLOCK / REQU
 - C0 raw（無防御）
 - C1 detector-only（決定的パターンマッチのみ: 不可視文字、既知命令フレーズ日英、エンコード命令）
 - C2 spotlighting-only（出所マーカー付与のみ、執行なし）
-- C3 taintgate（taint＋ポリシー執行＋spotlighting）
+- C3 taintwall（taint＋ポリシー執行＋spotlighting）
 
 ### 指標とレポート
 report.json / report.md に、条件別・I分類別の攻撃成功率 (ASR)、良性タスク完了率 (utility)、ツール出力に対する誤警報率 (FPR)、ポリシーID別発火件数、ローカル実測の実行時間を出す。GATE.md に下記ゲート表と実測値と判定を書く（満たさなければ「満たさない」と書く）。

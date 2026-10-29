@@ -5,7 +5,7 @@ from typing import Any, Callable, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
-from taintgate.llm_client import LLMClient, LLMResponse, ToolCallProposal
+from taintwall.llm_client import LLMClient, LLMResponse, ToolCallProposal
 
 
 OLLAMA_DEFAULT_MODEL = "qwen2.5:7b"

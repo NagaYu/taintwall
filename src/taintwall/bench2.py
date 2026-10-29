@@ -2,9 +2,9 @@
 
 from dataclasses import dataclass
 
-from taintgate.attribution import UserIntent
-from taintgate.bench import generate_cases
-from taintgate.provenance import Origin, Segment
+from taintwall.attribution import UserIntent
+from taintwall.bench import generate_cases
+from taintwall.provenance import Origin, Segment
 
 
 @dataclass(frozen=True)

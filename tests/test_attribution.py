@@ -1,12 +1,12 @@
-from taintgate.attribution import UserIntent, attribute_arguments, normalize, plan_segment
-from taintgate.boundary import GuardedExecutor
-from taintgate.llm_agent import LLMAgent
-from taintgate.llm_boundary import AttributingExecutor
-from taintgate.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
-from taintgate.policy import BLOCK, PolicyEngine
-from taintgate.provenance import Origin, Segment
-from taintgate.runner import UnguardedExecutor
-from taintgate.tools import MockTools
+from taintwall.attribution import UserIntent, attribute_arguments, normalize, plan_segment
+from taintwall.boundary import GuardedExecutor
+from taintwall.llm_agent import LLMAgent
+from taintwall.llm_boundary import AttributingExecutor
+from taintwall.llm_client import FakeLLMClient, LLMResponse, ToolCallProposal
+from taintwall.policy import BLOCK, PolicyEngine
+from taintwall.provenance import Origin, Segment
+from taintwall.runner import UnguardedExecutor
+from taintwall.tools import MockTools
 
 
 def test_normalize_nfkc_case_whitespace_and_punctuation() -> None:

@@ -1,4 +1,4 @@
-# TaintGate Phase 2 Final Report
+# TaintWall Phase 2 Final Report
 
 **PREVIEW — local Ollama measurements using `qwen2.5:14b`, with `qwen2.5:7b` as a supporting model. API cost: $0.** The 14B preview uses a deterministic sample: 80 cases for C0/C2/C3, 60 cases for C1/C4, and one trial. These measurements are provisional and do not establish performance beyond the tested model and cases.
 
@@ -11,8 +11,8 @@ Five conditions are compared using the deterministic preview subsets described a
 - **C0 raw:** no detector or policy boundary.
 - **C1 detector-only:** remove visible segments matched by the fixed keyword detector; no policy boundary.
 - **C2 spotlighting:** mark visible content as untrusted data in the prompt; no policy boundary.
-- **C3 TaintGate:** deterministic provenance attribution and P1–P6 enforcement at the tool boundary, without spotlighting.
-- **C4 TaintGate + extractor:** extract untrusted content into a data representation, preserve its taint roots, then apply the C3 boundary.
+- **C3 TaintWall:** deterministic provenance attribution and P1–P6 enforcement at the tool boundary, without spotlighting.
+- **C4 TaintWall + extractor:** extract untrusted content into a data representation, preserve its taint roots, then apply the C3 boundary.
 
 Argument attribution uses deterministic normalized text containment and email/URL entity matching against visible segments. Matching values inherit source labels and taint roots. An unmatched destination inherits the union of visible untrusted sources; other unmatched arguments are treated as trusted, with fixed patterns adding sensitive labels. User-authorized tools and explicit recipients come from case annotations, not model inference.
 

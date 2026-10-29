@@ -15,3 +15,4 @@
 - intent の explicit recipient はユーザーが決めた宛先を示す。untrusted 文書がその宛先を反復しても出所は変わらないため、P2 でも明示宛先を保護する
 - Phase 2 GATE2: PASS within evaluated scope; task-embedded procedure ASR and utility thresholds passed, explicit I1–I8 ASR is NOT EVALUABLE, and C4 incremental I4 value is NOT MET
 - Holdout decision: NOT RUN and keep sealed; preserve it for a future run with a stronger model because the explicit-attack axis had no C0 successes in the evaluated Qwen2.5 previews
+- 名称 TaintGate は同カテゴリの先行公開プロジェクト（GitHub/PyPI）と一致するため、公開前に TaintWall へ改名した。ベンチ名も InjectBench（先行フレームワークあり）から TaintWall Bench へ変更

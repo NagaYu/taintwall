@@ -1,7 +1,7 @@
-from taintgate.boundary import GuardedExecutor
-from taintgate.policy import ALLOW, ALLOW_WITH_REDACTION, BLOCK, REQUIRE_APPROVAL, PolicyEngine, ToolCall
-from taintgate.provenance import Origin, Segment
-from taintgate.tools import MockTools
+from taintwall.boundary import GuardedExecutor
+from taintwall.policy import ALLOW, ALLOW_WITH_REDACTION, BLOCK, REQUIRE_APPROVAL, PolicyEngine, ToolCall
+from taintwall.provenance import Origin, Segment
+from taintwall.tools import MockTools
 
 
 def segment(

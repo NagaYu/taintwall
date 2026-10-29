@@ -2,9 +2,9 @@ import json
 
 import pytest
 
-from taintgate.extractor import EXTRACTOR_SYSTEM_PROMPT, extract_segment
-from taintgate.llm_client import FakeLLMClient, LLMResponse
-from taintgate.provenance import Origin, Segment
+from taintwall.extractor import EXTRACTOR_SYSTEM_PROMPT, extract_segment
+from taintwall.llm_client import FakeLLMClient, LLMResponse
+from taintwall.provenance import Origin, Segment
 
 
 def _response_text(payload: dict[str, object]) -> str:

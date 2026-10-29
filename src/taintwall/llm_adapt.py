@@ -4,8 +4,8 @@ import json
 from dataclasses import replace
 from typing import Sequence
 
-from taintgate.bench2 import BenchCaseV2
-from taintgate.llm_client import LLMClient
+from taintwall.bench2 import BenchCaseV2
+from taintwall.llm_client import LLMClient
 
 
 ADAPTIVE_CASES_PER_CATEGORY = 5

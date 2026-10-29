@@ -1,1 +1,1 @@
-"""Command-line scripts for local TaintGate workflows."""
+"""Command-line scripts for local TaintWall workflows."""

@@ -1,9 +1,9 @@
 import sys
 from types import SimpleNamespace
 
-from taintgate.llm_agent import LLMAgent
-from taintgate.llm_client import AnthropicClient, FakeLLMClient, LLMResponse, ToolCallProposal
-from taintgate.provenance import Origin, Segment
+from taintwall.llm_agent import LLMAgent
+from taintwall.llm_client import AnthropicClient, FakeLLMClient, LLMResponse, ToolCallProposal
+from taintwall.provenance import Origin, Segment
 
 
 def test_fake_llm_reads_then_proposes_email_with_result_in_next_step() -> None:

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, replace
 
-from taintgate.policy import (
+from taintwall.policy import (
     ALLOW,
     ALLOW_WITH_REDACTION,
     DESTINATION_ARGUMENTS,
@@ -11,7 +11,7 @@ from taintgate.policy import (
     PolicyEngine,
     ToolCall,
 )
-from taintgate.tools import MockTools
+from taintwall.tools import MockTools
 
 
 @dataclass(frozen=True)
