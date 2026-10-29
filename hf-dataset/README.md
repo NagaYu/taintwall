@@ -1,3 +1,19 @@
+---
+license: other
+language:
+- en
+- ja
+configs:
+- config_name: cases
+  data_files:
+  - split: train
+    path: data/cases.jsonl
+- config_name: probes
+  data_files:
+  - split: train
+    path: data/probes.jsonl
+---
+
 # TaintWall Bench — Development Dataset
 
 This package contains the development split of **TaintWall Bench**. The holdout split is intentionally not included and remains sealed.
@@ -37,7 +53,7 @@ The following measurements are transcribed from the Phase 2 final report for `qw
 | C3 | 0.0000 | 0.7500 |
 | C4 | 0.0000 | 0.5625 |
 
-These are local PREVIEW measurements, not general performance claims. Repository: `<github-url>`.
+These are local PREVIEW measurements, not general performance claims. Repository: `https://github.com/NagaYu/taintwall`.
 
 ## Contamination and reproducibility
 

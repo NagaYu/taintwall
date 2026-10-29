@@ -29,3 +29,7 @@ Phase 3 ステップ1 完了（改名 TaintWall）
 Phase 3 ステップ3 完了（HF データセット準備、未アップロード）
 Phase 3 ステップ4 完了（HF Space パッケージ準備、未アップロード）
 Phase 3 ステップ4 完了（Static Space パッケージ準備、未アップロード）
+Phase 3 ステップ5 完了（公開実行: GitHub NagaYu/taintwall / HF データセット NagaYu/taintwall-bench / Static Space を private 検証後に public 化、CI 成功）
+HF データセットビューア修正（カードに configs を追加し cases / probes を分離、ビューア表示を確認: cases 216行 / probes 20行）
+Phase 3 ステップ6 完了（dev.to 記事、awesome-llm-security PR #413、Show HN を投稿。AgentDojo は Discussions 無効のため見送り）
+Phase 3 完了（公開・投稿まで完了。残件: awesome list PR のマージはメンテナー判断待ち）
