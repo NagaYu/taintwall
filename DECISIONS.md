@@ -13,3 +13,5 @@
 - Anthropic SDK は temperature=0 の呼び出し互換性を保つため `anthropic>=0.40,<1` に制限する（SDK 2.x は temperature 引数を拒否する）
 - bench v2.1 のスタイル次元として procedure を追加し、既存の I1〜I8 カテゴリ体系および dev マトリクスは変更しない
 - intent の explicit recipient はユーザーが決めた宛先を示す。untrusted 文書がその宛先を反復しても出所は変わらないため、P2 でも明示宛先を保護する
+- Phase 2 GATE2: PASS within evaluated scope; task-embedded procedure ASR and utility thresholds passed, explicit I1–I8 ASR is NOT EVALUABLE, and C4 incremental I4 value is NOT MET
+- Holdout decision: NOT RUN and keep sealed; preserve it for a future run with a stronger model because the explicit-attack axis had no C0 successes in the evaluated Qwen2.5 previews

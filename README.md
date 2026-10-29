@@ -8,6 +8,10 @@ Phase 1 is a SIMULATED, offline measurement using synthetic fixtures and a deter
 
 The current provisional GATE is PASS: adapted ASR is C1 100.0% versus C3 0.0%, and C3 utility is 100.0% versus C0 utility of 100.0%. See GATE.md and reports/phase1-report.md for sample sizes, category results, limitations, and the provisional status.
 
+## Phase 2 preview
+
+**PROVISIONAL PREVIEW — local Ollama measurements, not a general robustness claim.** On the 16-case task-embedded procedure set, qwen2.5:14b had C0 ASR 0.875 and C3 ASR 0.000; C3 utility was 0.750. The explicit I1–I8 attack axis was not evaluable at this model level because C0 ASR was 0/40. The bounded GATE2 decision is PASS for utility and task-embedded ASR, with that limitation stated. See the [Phase 2 final report](reports/phase2-final.md) and [GATE2](GATE2.md).
+
 ## Run locally
 
 Use Python 3.11 or newer:
